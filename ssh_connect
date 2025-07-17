@@ -1,0 +1,114 @@
+#!/bin/bash
+
+CONFIG_FILE="$HOME/.ssh/ssh_manager/hosts.json"
+MANAGE_SCRIPT="$HOME/.ssh/ssh_manager/ssh_manager.py"
+
+usage() {
+    echo "Usage: $0 [--hosts|-h]"
+    echo "       $0 (no arguments — connect to selected host)"
+    exit 1
+}
+
+# Check for --hosts or -h flag
+if [[ "$1" == "--hosts" || "$1" == "-h" ]]; then
+    if [ -f "$MANAGE_SCRIPT" ]; then
+        python3 "$MANAGE_SCRIPT"
+    else
+        echo "Error: Host management script not found at $MANAGE_SCRIPT"
+        echo "Please ensure manage_hosts.py is created."
+    fi
+    exit 0
+fi
+
+# Check jq and fzf
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is not installed. Please install jq."
+    exit 1
+fi
+if ! command -v fzf >/dev/null 2>&1; then
+    echo "Error: fzf is not installed. Please install fzf."
+    exit 1
+fi
+
+# Read and parse the JSON file with jq, apply domain, and format with awk
+CHOICE=$(jq -r '
+  .projects[] | 
+  .name as $project | 
+  (.user // "") as $proj_user | 
+  (.key // "") as $proj_key | 
+  (.domain // "") as $proj_domain | 
+  (.port // "22") as $proj_port | 
+  .hosts[] as $host_entry | 
+  ($project) + " | " + 
+  ($host_entry.name // "") + " | " + 
+  ($host_entry.user // $proj_user) + " | " + 
+  (
+    ($host_entry.addr // "") as $current_addr |
+    if ($current_addr | contains(".")) then
+      $current_addr
+    else
+      if ($proj_domain | length > 0) then
+        $current_addr + "." + $proj_domain
+      else
+        $current_addr
+      end
+    end
+  ) + " | " + 
+  ($host_entry.key // $proj_key) + " | " +
+  ($host_entry.port // $proj_port // "22")
+' "$CONFIG_FILE" | tr -d '\r' | awk -F'|' '{printf "%-12s | %-18s | %-15s | %-30s | %-30s | %-6s\n", $1, $2, $3, $4, $5, $6}' | fzf)
+
+# Exit if no choice was made
+if [[ -z "$CHOICE" ]]; then
+    exit 0
+fi
+
+# Clean up for parsing: remove extra spaces around delimiters
+CHOICE_CLEAN=$(echo "$CHOICE" | sed 's/^ *//; s/ *$//; s/ *| */|/g')
+IFS='|' read -r project host user addr key port <<<"$CHOICE_CLEAN"
+
+# Remove any remaining leading/trailing spaces from variables
+project=$(echo "$project" | xargs)
+host=$(echo "$host" | xargs)
+user=$(echo "$user" | xargs)
+addr=$(echo "$addr" | xargs)
+key=$(echo "$key" | xargs)
+port=$(echo "$port" | xargs)
+
+# Checks
+if [[ -z "$user" ]]; then
+    echo "Error: user is not set for connection."
+    exit 1
+fi
+if [[ -z "$addr" ]]; then
+    echo "Error: host address is not set."
+    exit 1
+fi
+if [[ -z "$port" ]]; then
+    port=22
+fi
+
+# Key check
+SSH_KEY_ARG=""
+if [[ -n "$key" ]]; then
+    if [[ ! -f "$key" ]]; then
+        echo "Warning: key '$key' not found. Connecting without key."
+    else
+        SSH_KEY_ARG="-i $key"
+    fi
+fi
+
+# Connect
+clear
+cat <<EOF
+Project: $project
+Connecting to $host ($addr) as $user on port $port
+-------------------
+EOF
+
+ssh "$SSH_KEY_ARG" -p "$port" "$user@$addr"
+SSH_STATUS=$?
+if [[ $SSH_STATUS -ne 0 ]]; then
+    echo -e "\nConnection error (ssh exited with code $SSH_STATUS)"
+    exit $SSH_STATUS
+fi

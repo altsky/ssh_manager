@@ -1,0 +1,55 @@
+{
+  "projects": [
+    {
+      "name": "webapp",
+      "user": "deploy",
+      "key": "/home/user/.ssh/webapp_id_rsa",
+      "domain": "webapp.example.com",
+      "port": "2222",
+      "hosts": [
+        {
+          "name": "frontend-01",
+          "addr": "10.0.0.11",
+          "port": "2201"
+        },
+        {
+          "name": "backend-01",
+          "addr": "backend",
+          "user": "backenduser",
+          "key": "/home/user/.ssh/backend_id_rsa"
+        }
+      ]
+    },
+    {
+      "name": "infra",
+      "hosts": [
+        {
+          "name": "db-primary",
+          "addr": "192.168.1.100",
+          "port": "2022"
+        },
+        {
+          "name": "db-replica",
+          "addr": "db-replica",
+          "domain": "infra.local",
+          "user": "replica"
+        }
+      ]
+    },
+    {
+      "name": "testlab",
+      "port": "2222",
+      "hosts": [
+        {
+          "name": "test_stand_1",
+          "addr": "test1.lab.local",
+          "key": "~/.ssh/test_id_rsa"
+        },
+        {
+          "name": "test_stand_2",
+          "addr": "10.10.10.2"
+        }
+      ]
+    }
+  ]
+}
