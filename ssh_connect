@@ -91,10 +91,11 @@ fi
 # Key check
 SSH_KEY_ARG=""
 if [[ -n "$key" ]]; then
-    if [[ ! -f "$key" ]]; then
-        echo "Warning: key '$key' not found. Connecting without key."
+    expanded_key="${key/#\~/$HOME}"
+    if [[ ! -f "$expanded_key" ]]; then
+        echo "Warning: key '$expanded_key' not found. Connecting without key."
     else
-        SSH_KEY_ARG="-i $key"
+        SSH_KEY_ARG="$expanded_key"
     fi
 fi
 
@@ -103,10 +104,21 @@ clear
 cat <<EOF
 Project: $project
 Connecting to $host ($addr) as $user on port $port
+Key: ${key:-"(none)"}
 -------------------
 EOF
 
-ssh "$SSH_KEY_ARG" -p "$port" "$user@$addr"
+# Debug info (remove if not needed)
+echo "Debug: SSH command will be: ssh -i $SSH_KEY_ARG -p $port $user@$addr"
+echo
+
+# Execute SSH command
+if [[ -n "$SSH_KEY_ARG" ]]; then
+    ssh -i "$SSH_KEY_ARG" -p "$port" "$user@$addr"
+else
+    ssh -p "$port" "$user@$addr"
+fi
+
 SSH_STATUS=$?
 if [[ $SSH_STATUS -ne 0 ]]; then
     echo -e "\nConnection error (ssh exited with code $SSH_STATUS)"
